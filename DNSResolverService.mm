@@ -63,6 +63,9 @@ static void parse_dns_name(unsigned char *chunk , unsigned char *ptr , char *out
         perror("create socket failed");
         exit(-1);
     }
+    struct timeval timeout = {1,0};
+    //    setsockopt(socketfd, SOL_SOCKET, SO_SNDTIMEO, (char *)&timeout,sizeof(struct timeval));//设置发送超时
+    setsockopt(socketfd, SOL_SOCKET, SO_RCVTIMEO, (char *)&timeout,sizeof(struct timeval));//设置接收超时
     bzero(&dest , sizeof(dest));
     dest.sin_family = AF_INET;
     dest.sin_port = htons(53);
@@ -70,7 +73,7 @@ static void parse_dns_name(unsigned char *chunk , unsigned char *ptr , char *out
     
     send_dns_request([host UTF8String]);
     NSArray *resIps = [self parse_dns_response];
-//    NSLog(@"%@",resIps.description);
+    //    NSLog(@"%@",resIps.description);
     return resIps;
 }
 
@@ -91,13 +94,18 @@ static void parse_dns_name(unsigned char *chunk , unsigned char *ptr , char *out
     socklen_t addr_len = sizeof(struct sockaddr);
     
     //    n = recvfrom(socketfd , buf , sizeof(buf) , 0 , (struct sockaddr*)&addr , &addr_len);
-    n = recvfrom(socketfd , buf , sizeof(buf) , 0 , (struct sockaddr*)&addr , &addr_len);
-    
+    n = (int)recvfrom(socketfd , buf , sizeof(buf) , 0 , (struct sockaddr*)&addr , &addr_len);
     ptr += 4; /* move ptr to Questions */
     querys = ntohs(*((unsigned short*)ptr));
     ptr += 2; /* move ptr to Answer RRs */
     answers = ntohs(*((unsigned short*)ptr));
     ptr += 6; /* move ptr to Querys */
+    
+    size_t tmpLen = strlen((const char *)ptr);
+    if (tmpLen <= querys) {
+        return resIps;
+    }
+    
     /* move over Querys */
     for(i= 0 ; i < querys ; i ++){
         for(;;){
@@ -149,7 +157,7 @@ static void parse_dns_name(unsigned char *chunk , unsigned char *ptr , char *out
 }
 
 static void parse_dns_name(unsigned char *chunk , unsigned char *ptr , char *out , int *len){
-    int n , alen , flag;
+    int n , flag;
     char *pos = out + (*len);
     
     for(;;){
@@ -237,5 +245,4 @@ static void generate_question(const char *dns_name , unsigned char *buf , int *l
     *((unsigned short*)ptr) = htons(1);
     *len += 2;
 }
-
 @end
